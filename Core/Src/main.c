@@ -46,6 +46,7 @@ typedef enum {
     SESSION_IDLE
 } DecodeState;
 /* USER CODE END PTD */
+
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
 #define PULSE_ON_TIME    500U
@@ -158,7 +159,41 @@ int main(void)
 	  HAL_Delay(25);
 	  /* USER CODE END 3 */
   }
-  /* USER CODE END WHILE */
+    /* USER CODE END WHILE */
+
+    /* USER CODE BEGIN 3 */
+	  uint32_t now = HAL_GetTick();
+	  uint32_t silence = now - lastPulseTime;
+
+	  if(state == WAITING_DIGIT_PAUSE && silence >= 3000 && pulseCount > 0) {
+		  // завершилась цифра
+		  send_json("digit", pulseCount);
+		  digits[digitIndex++] = pulseCount;
+		  pulseCount = 0;
+
+		  state = WAITING_CODE_PAUSE;
+	  }
+
+	  if(state == WAITING_CODE_PAUSE && silence >= 4000 && digitIndex > 0) {
+		  int code = digits[0] * 10 + digits[1];
+		  send_json("code", code);
+
+		  // reset
+		  digitIndex = 0;
+		  digits[0] = digits[1] = 0;
+		  pulseCount = 0;
+
+		  state = WAITING_PULSES;
+	  }
+
+	  // end of session if >10s паузы
+	  if(state != SESSION_IDLE && silence >= 10000 && digitIndex == 0 && pulseCount == 0) {
+		  send_json("session_end", -1);
+		  state = SESSION_IDLE;
+	  }
+
+	  HAL_Delay(25);
+  /* USER CODE END 3 */
 }
 
 /**
@@ -258,8 +293,8 @@ static void MX_GPIO_Init(void)
 
   /*Configure GPIO pin : PB9 */
   GPIO_InitStruct.Pin = GPIO_PIN_9;
-  GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
-  GPIO_InitStruct.Pull = GPIO_PULLDOWN;
+  GPIO_InitStruct.Mode = GPIO_MODE_IT_FALLING;
+  GPIO_InitStruct.Pull = GPIO_PULLUP;
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
   /* EXTI interrupt init*/
